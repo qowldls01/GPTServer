@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -13,348 +14,312 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
-
 // =====================================================
 // 이전에 출제된 문제 저장
-// =====================================================
-// 감정 + 난이도별로 최근 문제를 기억합니다.
-// 서버를 종료하면 초기화됩니다.
+// 서버를 재시작하면 초기화됨
 // =====================================================
 
 const previousQuestions = {};
 
-
 // =====================================================
-// 정보 교과 출제 범위
+// 1. 출제 범위
 // =====================================================
 
 function getSubjectInstruction() {
-
     return `
-=====================================================
-출제 대상 및 범위
-=====================================================
+당신은 컴퓨터교육 및 정보·ICT 분야의 전문 문제 출제자입니다.
 
-모든 문제는 반드시
-"중·고등학교 정보 교과 수준"
-으로 출제하세요.
+출제 대상:
+고등학교 정보 심화 학습자 및 대학교 컴퓨터 관련 전공 입문 학습자
 
-특정 프로그래밍 언어 시험이나
-대학교 컴퓨터공학 전공 시험처럼 출제하지 마세요.
+다음 영역을 활용하여 문제를 출제하세요.
 
-다음 정보 교과 영역에서 골고루 출제하세요.
+1. C언어
+- 변수와 자료형
+- 조건문과 반복문
+- 배열과 포인터
+- 함수
+- 코드 실행 결과 예측
+- 코드의 오류 분석
 
-1. 정보 윤리
-- 개인정보 보호
-- 저작권
-- 디지털 시민성
-- 올바른 정보 활용
-- 사이버 윤리
+2. 운영체제
+- 프로세스와 스레드
+- CPU 스케줄링
+- 프로세스 동기화
+- 경쟁 상태
+- 교착 상태
+- 메모리 관리
+- 가상 메모리
 
-2. 정보 보안
-- 비밀번호 보안
-- 피싱
-- 악성코드
-- 개인정보 유출
-- 안전한 인터넷 사용
-- 기본적인 보안 방법
+3. 알고리즘
+- 순차 탐색과 이진 탐색
+- 버블 정렬, 선택 정렬, 삽입 정렬
+- 재귀 알고리즘
+- 시간 복잡도
+- 알고리즘의 효율성 비교
 
-3. 컴퓨터 시스템
-- 하드웨어와 소프트웨어
+4. 자료구조
+- 배열
+- 연결 리스트
+- 스택
+- 큐와 원형 큐
+- 트리
+- 힙
+- 해시 테이블
+
+5. 네트워크 및 ICT
+- OSI 7계층
+- TCP/IP
+- IP 주소
+- 데이터 통신
+- 라우팅
+- IoT
+- 클라우드 컴퓨팅
+
+6. 컴퓨터 구조
 - CPU
-- 주기억장치
-- 보조기억장치
-- 입력장치와 출력장치
-- 운영체제의 기본 역할
+- 주기억장치와 보조기억장치
+- 캐시 메모리
+- 명령어 실행 과정
+- 인터럽트
 
-4. 네트워크
-- 인터넷
-- 네트워크의 기본 개념
-- IP 주소의 기본 역할
-- 유무선 네트워크
-- 데이터 통신의 기본 개념
+7. 데이터베이스
+- 관계형 데이터베이스
+- 기본키와 외래키
+- SQL 기초
+- 데이터 정규화
 
-5. 자료와 정보
-- 자료와 정보의 차이
-- 자료의 표현
-- 디지털 데이터
-- 정보의 수집
-- 정보의 분석
-- 정보의 활용
+8. 인공지능과 데이터
+- 머신러닝
+- 지도학습과 비지도학습
+- 학습 데이터
+- 인공지능 모델 평가
+- 생성형 AI
 
-6. 알고리즘
-- 알고리즘의 의미
-- 알고리즘의 조건
-- 문제 해결 과정
-- 순차 구조
-- 선택 구조
-- 반복 구조
-- 간단한 알고리즘 표현
+9. 정보 보안
+- 암호화
+- 사용자 인증
+- 접근 제어
+- 네트워크 보안
 
-7. 프로그래밍 기초
-- 변수
-- 자료형
-- 연산자
-- 조건문
-- 반복문
-- 함수의 기본 개념
-- 프로그램의 기본 실행 원리
+10. 정보 윤리
+- 저작권
+- 개인정보 보호
+- 디지털 시민성
 
-8. 인공지능 기초
-- 인공지능의 개념
-- 인공지능 활용 사례
-- 머신러닝의 기본 개념
-- 데이터와 인공지능
-- 생성형 AI의 기본 개념
-- 인공지능 윤리
+[필수 출제 조건]
 
+10문제 중 다음 영역에서 각각 최소 1문제를 출제하세요.
 
-=====================================================
-중요한 출제 제한
-=====================================================
+- C언어
+- 운영체제
+- 알고리즘
+- 자료구조
+- 네트워크 및 ICT
 
-Python 자체를 시험하는 문제만 반복하지 마세요.
+나머지 문제는 다른 영역을 골고루 활용하세요.
 
-Python의 특정 라이브러리나
-특정 내장 함수 사용법을 깊게 묻는 문제는 만들지 마세요.
+동일한 영역에서는 최대 2문제까지만 출제하세요.
 
-예를 들어
-"list(zip(...))의 실행 결과는?"
-같은 특정 함수 암기 문제는 피하세요.
+정보 보안과 정보 윤리는 합쳐서 최대 1문제만 출제하세요.
 
-중·고등학교 정보 교과에서 배우는
-핵심 개념과 문제 해결 능력을 확인하는 문제를 만드세요.
+다음과 같은 지나치게 쉬운 문제는 피하세요.
 
-프로그래밍 문제를 출제하는 것은 가능하지만,
-프로그래밍은 전체 정보 교과 영역 중 하나로만 다루세요.
+- 안전한 비밀번호는 무엇인가?
+- 개인정보를 보호하려면 어떻게 해야 하는가?
+- 컴퓨터의 두뇌라고 불리는 장치는 무엇인가?
 
-10문제를 만들 때 특정 영역에만 지나치게 집중하지 마세요.
+단순 생활 상식보다는 컴퓨터 관련 개념을 이해하고
+적용할 수 있는지 평가하세요.
 
-가능하면 여러 정보 교과 영역을 섞어서 출제하세요.
-
-학생이 학교 정보 수업에서
-배울 수 있는 수준을 벗어나지 마세요.
+모든 문제는 기술적으로 정확해야 합니다.
 `;
 }
 
-
 // =====================================================
-// 감정별 출제 방식
+// 2. 감정별 출제 방식
 // =====================================================
 
 function getEmotionInstruction(emotion) {
 
     if (emotion === "angry") {
-
         return `
-=====================================================
 현재 감정: 화남
-=====================================================
 
-사용자는 현재 화난 상태입니다.
+빠르게 읽고 판단할 수 있는 게임형 문제를 출제하세요.
 
-빠르게 읽고 바로 답할 수 있는
-게임형 정보 교과 문제를 만들어 주세요.
-
-복잡한 계산이나 긴 사고 과정이 필요한 문제는 피하세요.
-
-문제와 선택지는 매우 짧고 직관적으로 작성하세요.
+- 문제와 선택지를 짧게 작성하세요.
+- 긴 계산이나 복잡한 코드 분석은 피하세요.
+- 단순 생활 상식 문제가 아닌 전공 핵심 개념을 활용하세요.
+- 빠르게 정답을 선택할 수 있도록 구성하세요.
 `;
     }
-
 
     if (emotion === "sad") {
-
         return `
-=====================================================
 현재 감정: 슬픔
-=====================================================
 
-사용자는 현재 슬픈 상태입니다.
+학습 부담을 줄이면서 전공 기초 개념을 학습할 수 있도록
+문제를 구성하세요.
 
-학습 부담을 줄일 수 있도록
-쉬운 정보 교과 문제를 만들어 주세요.
-
-핵심 개념을 확인하는 문제를 중심으로 구성하세요.
-
-문장은 부드럽고 간단하게 작성하세요.
+- 비교적 쉬운 전공 기초 문제를 출제하세요.
+- 질문을 명확하고 친절하게 작성하세요.
+- 복잡한 계산이나 여러 단계의 추론은 줄이세요.
+- 지나치게 쉬운 생활 상식 문제는 출제하지 마세요.
 `;
     }
-
 
     if (emotion === "good") {
-
         return `
-=====================================================
 현재 감정: 좋음
-=====================================================
 
-사용자는 현재 기분이 좋은 상태입니다.
+학습자가 적극적으로 사고할 수 있도록
+심화 및 응용 문제를 활용하세요.
 
-중·고등학교 정보 교과 범위 안에서
-조금 더 생각해야 풀 수 있는
-심화 및 응용 문제를 만들어 주세요.
+- 코드 분석
+- 실행 결과 예측
+- 개념 비교
+- 상황에 적합한 알고리즘 선택
+- 자료구조 동작 원리
+- 운영체제 상황 판단
 
-단순 용어 암기 문제만 반복하지 말고,
-간단한 상황 판단이나 개념 응용 문제도 포함하세요.
+위와 같은 문제 유형을 적극 활용하세요.
 
-단, 대학 전공 수준으로 어렵게 만들지는 마세요.
+단, 선택된 난이도와 이전 학습 성취도에 따른
+난이도 보정도 함께 적용하세요.
 `;
     }
 
-
     return `
-=====================================================
 현재 감정: 보통
-=====================================================
 
-사용자는 현재 보통 상태입니다.
-
-선택된 난이도에 맞춰
-중·고등학교 정보 교과 문제를
-균형 있게 만들어 주세요.
+사용자가 선택한 기본 또는 심화 난이도에 맞춰
+전공 분야를 균형 있게 출제하세요.
 `;
 }
 
-
 // =====================================================
-// 기본 난이도
+// 3. 기본 난이도
 // =====================================================
 
 function getDifficultyInstruction(difficulty) {
 
     if (difficulty === "easy") {
-
         return `
-=====================================================
 난이도: 쉬움
-=====================================================
 
-중·고등학교 정보 교과의
-기초 개념을 확인하는 수준으로 출제하세요.
+고등학교 정보 심화 및 대학교 전공 입문 수준입니다.
 
-복잡한 응용보다는
-학생이 핵심 개념을 이해했는지 확인하세요.
+- 핵심 개념 이해
+- 기초적인 개념 비교
+- 간단한 코드 실행 결과
+- 자료구조의 기본 동작
+
+위 내용을 중심으로 출제하세요.
+
+지나치게 쉬운 상식 문제는 피하세요.
 `;
     }
-
 
     if (difficulty === "hard") {
-
         return `
-=====================================================
 난이도: 심화
-=====================================================
 
-중·고등학교 정보 교과 범위 안에서
-개념 이해와 간단한 응용 능력을 확인하세요.
+대학교 컴퓨터 관련 전공 기초~중급 수준입니다.
 
-단순 암기 문제만 출제하지 마세요.
+단순 용어 암기보다는 다음 문제를 우선하세요.
 
-상황을 보고 적절한 방법을 선택하거나
-결과를 예상하는 문제도 포함할 수 있습니다.
+- C언어 코드 분석
+- 알고리즘 시간 복잡도 비교
+- 자료구조 동작 결과 예측
+- 운영체제 상황 분석
+- 네트워크 프로토콜 비교
+- 실제 상황에서 적절한 방법 선택
 
-대학교 컴퓨터공학 전공 수준의
-전문적인 내용은 출제하지 마세요.
+정답을 도출하려면 개념을 이해하고
+적용해야 하는 문제를 출제하세요.
+
+불필요하게 복잡한 계산은 피하되,
+단순 암기만으로 풀 수 있는 문제에 치우치지 마세요.
 `;
     }
 
-
     return `
-=====================================================
 난이도: 기본
-=====================================================
 
-중·고등학교 정보 교과의
-기본적인 개념과 이해를 확인하는 수준으로 출제하세요.
+고등학교 정보 심화 및 대학교 전공 입문 수준입니다.
 
-너무 쉽거나 지나치게 전문적인 문제는 피하세요.
+기본 개념을 이해하고 간단한 상황에 적용하는
+문제를 중심으로 출제하세요.
+
+단순 정의 암기 문제만 반복하지 마세요.
 `;
 }
 
-
 // =====================================================
-// ★ 이전 학습 성취도에 따른 적응형 난이도
+// 4. 이전 학습 성취도에 따른 적응형 난이도
 // =====================================================
 
 function getAdaptiveInstruction(adaptiveLevel) {
 
     if (adaptiveLevel === "easier") {
-
         return `
-=====================================================
 이전 학습 성취도 보정: 조금 쉽게
-=====================================================
 
-사용자는 이전 학습에서 정답률이 낮았습니다.
+이전 학습에서 정답률이 낮았습니다.
 
-현재 감정과 기본 난이도는 그대로 유지하면서
-문제의 전체적인 난이도를 조금 낮춰 주세요.
+현재 감정과 선택된 기본 난이도를 유지하면서
+문제의 난이도를 조금 낮추세요.
 
-- 핵심 개념을 직접적으로 묻는 문제를 조금 더 사용하세요.
-- 복잡한 상황 판단이나 여러 단계의 사고는 줄이세요.
-- 문제와 선택지를 이해하기 쉽게 작성하세요.
-- 지나치게 쉬운 상식 문제로 만들지는 마세요.
+- 핵심 개념을 직접적으로 묻는 문제를 늘리세요.
+- 여러 단계의 추론이 필요한 문제를 줄이세요.
+- 선택지를 명확하게 작성하세요.
+- 단순 생활 상식 문제로 바꾸지는 마세요.
 
-중요:
-현재 감정에 따른 학습 방식은 그대로 유지하세요.
-문제 유형과 O/X 문제의 위치도 절대 변경하지 마세요.
+문제 유형과 O/X 문제 위치는 변경하지 마세요.
 `;
     }
-
 
     if (adaptiveLevel === "harder") {
-
         return `
-=====================================================
 이전 학습 성취도 보정: 조금 어렵게
-=====================================================
 
-사용자는 이전 학습에서 높은 정답률을 기록했습니다.
+이전 학습에서 높은 정답률을 기록했습니다.
 
-현재 감정과 기본 난이도는 그대로 유지하면서
-문제의 전체적인 난이도를 조금 높여 주세요.
+현재 감정과 선택된 기본 난이도를 유지하면서
+문제의 난이도를 조금 높이세요.
 
-- 단순 암기 문제의 비중을 조금 줄이세요.
-- 개념을 상황에 적용하는 문제를 조금 더 포함하세요.
-- 두 개념을 비교하거나 결과를 판단하는 문제도 활용하세요.
-- 중·고등학교 정보 교과 범위를 벗어나지 마세요.
-- 대학 전공 수준으로 어렵게 만들지 마세요.
+- 단순 암기 문제의 비중을 줄이세요.
+- 코드 분석 문제를 활용하세요.
+- 개념 비교 문제를 활용하세요.
+- 상황 판단 문제를 활용하세요.
+- 응용 문제의 비중을 높이세요.
 
-중요:
-현재 감정에 따른 학습 방식은 그대로 유지하세요.
-문제 유형과 O/X 문제의 위치도 절대 변경하지 마세요.
+문제 유형과 O/X 문제 위치는 변경하지 마세요.
 `;
     }
 
-
     return `
-=====================================================
 이전 학습 성취도 보정: 유지
-=====================================================
 
-이전 학습 결과에 따른 추가적인 난이도 조절 없이
-현재 감정과 선택된 기본 난이도에 맞춰 출제하세요.
+추가적인 난이도 보정 없이
+현재 감정과 선택된 난이도에 맞춰 출제하세요.
 
-감정별 학습 방식과
-문제 유형 및 O/X 위치는 그대로 유지하세요.
+문제 유형과 O/X 문제 위치는 변경하지 마세요.
 `;
 }
 
-
 // =====================================================
-// 문제 유형 규칙
+// 5. 문제 유형 규칙
+// 기존 Unity 설정 유지
 // =====================================================
 
 function getQuestionTypeRules(emotion, difficulty) {
 
     // 화남: 전부 객관식
     if (emotion === "angry") {
-
         return `
-=====================================================
-문제 유형
-=====================================================
+문제 유형:
 
 1번: multiple
 2번: multiple
@@ -367,18 +332,14 @@ function getQuestionTypeRules(emotion, difficulty) {
 9번: multiple
 10번: multiple
 
-화남에서는 O/X 문제를 만들지 마세요.
+O/X 문제를 만들지 마세요.
 `;
     }
 
-
-    // 좋음: 짝수 O/X
+    // 좋음: 짝수 번호 O/X
     if (emotion === "good") {
-
         return `
-=====================================================
-문제 유형
-=====================================================
+문제 유형:
 
 1번: multiple
 2번: ox
@@ -393,14 +354,10 @@ function getQuestionTypeRules(emotion, difficulty) {
 `;
     }
 
-
-    // 슬픔: 2번만 O/X
+    // 슬픔: 2번 O/X
     if (emotion === "sad") {
-
         return `
-=====================================================
-문제 유형
-=====================================================
+문제 유형:
 
 1번: multiple
 2번: ox
@@ -415,18 +372,13 @@ function getQuestionTypeRules(emotion, difficulty) {
 `;
     }
 
-
-    // 보통 + 기본: 6번만 O/X
+    // 보통 + 기본: 6번 O/X
     if (
-        emotion === "normal"
-        &&
+        emotion === "normal" &&
         difficulty === "basic"
     ) {
-
         return `
-=====================================================
-문제 유형
-=====================================================
+문제 유형:
 
 1번: multiple
 2번: multiple
@@ -441,18 +393,13 @@ function getQuestionTypeRules(emotion, difficulty) {
 `;
     }
 
-
-    // 보통 + 심화: 2번만 O/X
+    // 보통 + 심화: 2번 O/X
     if (
-        emotion === "normal"
-        &&
+        emotion === "normal" &&
         difficulty === "hard"
     ) {
-
         return `
-=====================================================
-문제 유형
-=====================================================
+문제 유형:
 
 1번: multiple
 2번: ox
@@ -467,78 +414,56 @@ function getQuestionTypeRules(emotion, difficulty) {
 `;
     }
 
-
     return `
 모든 문제는 multiple 유형으로 작성하세요.
 `;
 }
 
-
 // =====================================================
-// 길이 제한
+// 6. 문제 길이 제한
 // =====================================================
 
 function getLengthRules(emotion) {
 
     if (emotion === "angry") {
-
         return `
-=====================================================
-화남 게임 길이 제한
-=====================================================
+화남 게임 화면 제한:
 
-화남 게임은 빠르게 답하는 게임입니다.
+- question: 45자 이내
+- correctAnswer: 12자 이내
+- wrongAnswer1: 12자 이내
+- wrongAnswer2: 12자 이내
+- explanation: 80자 이내
 
-반드시 아래 규칙을 지키세요.
-
-- 문제 문장은 40자 이내
-- correctAnswer는 6자 이내
-- wrongAnswer1은 6자 이내
-- wrongAnswer2는 6자 이내
-
-선택지는 가능하면
-한 단어 또는 매우 짧은 표현으로 작성하세요.
-
-긴 문장 선택지는 만들지 마세요.
-
-복잡하거나 긴 코드는 출제하지 마세요.
-
-explanation은 60자 이내로 작성하세요.
-
-해설은 1~2문장 이내로 작성하세요.
+긴 코드는 출제하지 마세요.
+선택지는 짧고 명확하게 작성하세요.
 `;
     }
 
-
     return `
-=====================================================
-일반 퀴즈 길이 제한
-=====================================================
+모바일 퀴즈 화면 제한:
 
-모바일 화면에 표시되는 문제입니다.
+- question: 110자 이내
+- correctAnswer: 40자 이내
+- wrongAnswer1: 40자 이내
+- wrongAnswer2: 40자 이내
+- explanation: 160자 이내
 
-반드시 아래 규칙을 지키세요.
+해설은 최대 3문장으로 작성하세요.
 
-- 문제 문장은 60자 이내
-- correctAnswer는 20자 이내
-- wrongAnswer1은 20자 이내
-- wrongAnswer2는 20자 이내
-- explanation은 80자 이내
+C언어 코드가 필요한 경우 최대 4줄까지만 사용하세요.
 
-해설은 최대 2문장으로 작성하세요.
+JSON 문자열 안에서 코드 줄바꿈이 필요하면
+올바르게 이스케이프된 줄바꿈 문자를 사용하세요.
 
-불필요한 긴 설명은 넣지 마세요.
+선택지 세 개의 길이와 표현 방식을 비슷하게 맞추세요.
 
-프로그래밍 코드가 필요한 경우에도
-코드는 최대 2줄을 넘지 않도록 하세요.
-
-선택지는 최대한 짧고 명확하게 작성하세요.
+문제의 정확성과 구분력을 우선하세요.
 `;
 }
 
-
 // =====================================================
-// 이전 문제 중복 방지
+// 7. 이전 문제 중복 방지
 // =====================================================
 
 function getPreviousQuestionInstruction(
@@ -546,69 +471,177 @@ function getPreviousQuestionInstruction(
     difficulty
 ) {
 
-    const key =
-        emotion + "_" + difficulty;
+    const key = emotion + "_" + difficulty;
 
-
-    const oldQuestions =
-        previousQuestions[key] || [];
-
+    const oldQuestions = previousQuestions[key] || [];
 
     if (oldQuestions.length === 0) {
-
         return `
-=====================================================
-새 문제 생성 규칙
-=====================================================
+새로운 문제 10개를 만들어 주세요.
 
-새로운 정보 교과 문제 10개를 만들어 주세요.
-
-10개의 문제 안에서도
-같은 내용을 반복하지 마세요.
-
-정보 교과의 여러 영역을
-가능하면 다양하게 활용하세요.
+동일한 개념이나 질문을 반복하지 마세요.
+여러 전공 영역을 골고루 활용하세요.
 `;
     }
 
-
-    const questionList =
-        oldQuestions
-            .map(
-                (question, index) =>
-                    `${index + 1}. ${question}`
-            )
-            .join("\n");
-
+    const questionList = oldQuestions
+        .map(
+            (question, index) =>
+                `${index + 1}. ${question}`
+        )
+        .join("\n");
 
     return `
-=====================================================
-이전 문제 중복 출제 금지
-=====================================================
-
-아래 문제들은 이전 학습에서
-이미 출제된 문제입니다.
+이전에 출제된 문제:
 
 ${questionList}
 
-위 문제와 동일한 문제를 다시 만들지 마세요.
+위 문제와 동일하거나 매우 유사한 문제를 피하세요.
 
-문장의 단어만 조금 바꾼
-유사 문제도 피하세요.
+단순히 단어만 바꾼 문제도 피하세요.
 
-이전과 다른 정보 교과 영역,
-다른 개념,
-다른 상황,
-다른 예시를 적극적으로 활용하세요.
-
-매 요청마다 새로운 문제 세트를
-생성하는 것이 중요합니다.
+이전과 다른 개념, 상황, 코드,
+알고리즘 또는 자료구조를 활용하세요.
 `;
 }
 
+// =====================================================
+// 8. 생성 결과 검사
+// =====================================================
+
+function validateQuestions(questions, emotion, difficulty) {
+
+    if (!Array.isArray(questions)) {
+        throw new Error("questions 배열이 없습니다.");
+    }
+
+    if (questions.length !== 10) {
+        throw new Error("문제 개수가 10개가 아닙니다.");
+    }
+
+    const rules = getExpectedTypes(emotion, difficulty);
+
+    questions.forEach((question, index) => {
+
+        const fields = [
+            "type",
+            "question",
+            "correctAnswer",
+            "wrongAnswer1",
+            "wrongAnswer2",
+            "explanation"
+        ];
+
+        for (const field of fields) {
+            if (typeof question[field] !== "string") {
+                throw new Error(
+                    `${index + 1}번 문제의 ${field} 형식이 잘못되었습니다.`
+                );
+            }
+        }
+
+        if (question.type !== rules[index]) {
+            throw new Error(
+                `${index + 1}번 문제 유형이 잘못되었습니다.`
+            );
+        }
+
+        if (!question.question.trim()) {
+            throw new Error(
+                `${index + 1}번 문제 내용이 비어 있습니다.`
+            );
+        }
+
+        if (!question.explanation.trim()) {
+            throw new Error(
+                `${index + 1}번 해설이 비어 있습니다.`
+            );
+        }
+
+        if (question.type === "ox") {
+
+            if (
+                question.correctAnswer !== "O" &&
+                question.correctAnswer !== "X"
+            ) {
+                throw new Error(
+                    `${index + 1}번 O/X 정답이 잘못되었습니다.`
+                );
+            }
+
+            const opposite =
+                question.correctAnswer === "O" ? "X" : "O";
+
+            if (
+                question.wrongAnswer1 !== opposite ||
+                question.wrongAnswer2 !== ""
+            ) {
+                throw new Error(
+                    `${index + 1}번 O/X 선택지가 잘못되었습니다.`
+                );
+            }
+
+        } else {
+
+            const answers = [
+                question.correctAnswer.trim(),
+                question.wrongAnswer1.trim(),
+                question.wrongAnswer2.trim()
+            ];
+
+            if (
+                answers.some(answer => answer.length === 0) ||
+                new Set(answers).size !== 3
+            ) {
+                throw new Error(
+                    `${index + 1}번 객관식 선택지가 비었거나 중복되었습니다.`
+                );
+            }
+        }
+    });
+}
 
 // =====================================================
-// GPT 문제 생성
+// 9. 기대하는 문제 유형
+// =====================================================
+
+function getExpectedTypes(emotion, difficulty) {
+
+    const types = Array(10).fill("multiple");
+
+    if (emotion === "angry") {
+        return types;
+    }
+
+    if (emotion === "good") {
+        [1, 3, 5, 7, 9].forEach(
+            index => types[index] = "ox"
+        );
+
+        return types;
+    }
+
+    if (emotion === "sad") {
+        types[1] = "ox";
+        return types;
+    }
+
+    if (emotion === "normal") {
+
+        if (difficulty === "basic") {
+            types[5] = "ox";
+        }
+
+        if (difficulty === "hard") {
+            types[1] = "ox";
+        }
+    }
+
+    return types;
+}
+
+// =====================================================
+// 10. GPT 문제 생성
 // =====================================================
 
 async function generateQuestions(
@@ -620,38 +653,20 @@ async function generateQuestions(
     const subjectInstruction =
         getSubjectInstruction();
 
-
     const emotionInstruction =
-        getEmotionInstruction(
-            emotion
-        );
-
+        getEmotionInstruction(emotion);
 
     const difficultyInstruction =
-        getDifficultyInstruction(
-            difficulty
-        );
+        getDifficultyInstruction(difficulty);
 
-
-    // ★ 이전 학습 결과에 따른 난이도 보정
     const adaptiveInstruction =
-        getAdaptiveInstruction(
-            adaptiveLevel
-        );
-
+        getAdaptiveInstruction(adaptiveLevel);
 
     const questionTypeRules =
-        getQuestionTypeRules(
-            emotion,
-            difficulty
-        );
-
+        getQuestionTypeRules(emotion, difficulty);
 
     const lengthRules =
-        getLengthRules(
-            emotion
-        );
-
+        getLengthRules(emotion);
 
     const previousQuestionInstruction =
         getPreviousQuestionInstruction(
@@ -659,73 +674,99 @@ async function generateQuestions(
             difficulty
         );
 
-
-    // 매 요청마다 다른 ID
     const generationId =
-        Date.now().toString()
-        + "-"
-        + Math.random()
-            .toString(36)
-            .substring(2, 8);
-
+        Date.now().toString() +
+        "-" +
+        Math.random().toString(36).substring(2, 8);
 
     const prompt = `
-당신은 중·고등학교 정보 교과를 가르치는 교사입니다.
+당신은 정보·ICT 및 컴퓨터 전공 기초 문제 출제자입니다.
 
 이번 문제 세트 ID:
 ${generationId}
 
-ID 자체를 문제나 답에 출력하지 마세요.
-
+ID는 문제나 답에 출력하지 마세요.
 
 ${subjectInstruction}
 
-
 ${emotionInstruction}
-
 
 ${difficultyInstruction}
 
-
 ${adaptiveInstruction}
-
 
 ${questionTypeRules}
 
-
 ${lengthRules}
 
-
 ${previousQuestionInstruction}
-
 
 =====================================================
 전체 문제 구성 규칙
 =====================================================
 
-정확히 10개의 문제를 만들어 주세요.
+정확히 10개의 문제를 생성하세요.
 
-정보 교과의 여러 영역을
-가능하면 다양하게 섞어서 출제하세요.
+C언어, 운영체제, 알고리즘, 자료구조,
+네트워크·ICT에서 각각 최소 1문제를 출제하세요.
 
-특정 영역에서만 10문제를 만들지 마세요.
+나머지 문제는 다른 영역에서 골고루 출제하세요.
 
-특히 프로그래밍 문제만
-10문제를 만드는 것은 금지합니다.
+정보 보안과 정보 윤리는 합쳐서 최대 1문제입니다.
 
-정보 윤리,
-정보 보안,
-컴퓨터 시스템,
-네트워크,
-자료와 정보,
-알고리즘,
-프로그래밍 기초,
-인공지능 기초 등의 영역을
-적절히 활용하세요.
+단순 암기 문제에만 집중하지 마세요.
 
+다음 문제 유형을 적절히 활용하세요.
+
+- 개념 비교
+- 코드 실행 결과
+- 자료구조 동작 결과
+- 알고리즘 시간 복잡도
+- 운영체제 상황 판단
+- 네트워크 기술 적용
+- 실제 문제 해결
 
 =====================================================
-각 문제에 필요한 필드
+선택지 품질 규칙
+=====================================================
+
+객관식 문제에는 정답 1개와 오답 2개를 작성하세요.
+
+오답은 학습자가 실제로 혼동할 수 있는
+그럴듯한 내용이어야 합니다.
+
+정답이 지나치게 길거나 구체적이라는 이유로
+쉽게 드러나지 않도록 하세요.
+
+세 선택지의 문장 길이와 표현 방식을
+가능하면 비슷하게 맞추세요.
+
+명백하게 엉뚱하거나 우스꽝스러운 오답은 금지합니다.
+
+모든 객관식 문제에는 명확한 정답이
+정확히 하나만 존재해야 합니다.
+
+=====================================================
+정확성 규칙
+=====================================================
+
+C언어 코드 실행 결과 문제는
+실제로 유효한 코드만 사용하세요.
+
+정의되지 않은 동작에 의존하는 문제는
+출제하지 마세요.
+
+알고리즘 시간 복잡도 문제는
+입력 조건과 분석 기준을 명확하게 작성하세요.
+
+운영체제 문제는
+주어진 조건에서 답이 하나로 결정되도록 작성하세요.
+
+문제를 생성한 후 정답과 해설이
+일치하는지 스스로 검토하세요.
+
+=====================================================
+각 문제의 필수 필드
 =====================================================
 
 type
@@ -735,69 +776,45 @@ wrongAnswer1
 wrongAnswer2
 explanation
 
-
 =====================================================
-multiple 문제 규칙
+객관식 문제 규칙
 =====================================================
 
-type은 반드시 "multiple" 입니다.
+type은 "multiple"입니다.
 
-correctAnswer에는
-정답 1개를 작성하세요.
+correctAnswer에는 정답을 작성하세요.
 
-wrongAnswer1에는
-오답 1개를 작성하세요.
+wrongAnswer1과 wrongAnswer2에는
+서로 다른 오답을 작성하세요.
 
-wrongAnswer2에는
-오답 1개를 작성하세요.
-
-정답과 오답은
-서로 중복되면 안 됩니다.
-
+세 선택지는 서로 중복되면 안 됩니다.
 
 =====================================================
 O/X 문제 규칙
 =====================================================
 
-type은 반드시 "ox" 입니다.
+type은 "ox"입니다.
 
-correctAnswer에는 반드시
+correctAnswer에는 "O" 또는 "X"만 사용하세요.
 
-"O"
+wrongAnswer1에는 정답의 반대 값을 넣으세요.
 
-또는
+wrongAnswer2는 반드시 빈 문자열 ""로 작성하세요.
 
-"X"
-
-중 하나만 사용하세요.
-
-wrongAnswer1에는
-정답의 반대 값을 넣으세요.
-
-correctAnswer가 "O"라면
-wrongAnswer1은 "X"입니다.
-
-correctAnswer가 "X"라면
-wrongAnswer1은 "O"입니다.
-
-wrongAnswer2는 반드시
-빈 문자열 "" 로 작성하세요.
-
+O/X 문제의 위치는 앞에서 지정한
+문제 유형 규칙을 정확하게 따르세요.
 
 =====================================================
 출력 형식
 =====================================================
 
-반드시 JSON만 출력하세요.
+반드시 유효한 JSON 객체 하나만 출력하세요.
 
-마크다운을 사용하지 마세요.
+마크다운이나 코드 블록은 사용하지 마세요.
 
-코드 블록을 사용하지 마세요.
+JSON 앞뒤에 설명 문장을 붙이지 마세요.
 
-JSON 앞이나 뒤에
-설명 문장을 붙이지 마세요.
-
-형식:
+다음 형식을 사용하세요.
 
 {
   "questions": [
@@ -805,334 +822,218 @@ JSON 앞이나 뒤에
       "type": "multiple",
       "question": "문제 내용",
       "correctAnswer": "정답",
-      "wrongAnswer1": "오답1",
-      "wrongAnswer2": "오답2",
+      "wrongAnswer1": "오답 1",
+      "wrongAnswer2": "오답 2",
       "explanation": "해설"
     }
   ]
 }
 
-questions 배열에는
-반드시 정확히 10개의 문제가 있어야 합니다.
+questions 배열에는 반드시 정확히
+10개의 문제가 있어야 합니다.
 `;
 
-
     // =================================================
-    // OpenAI API 요청
+    // GPT API 요청
     // =================================================
 
-    const response =
-        await openai.responses.create({
+    const response = await openai.responses.create({
 
-            model: "gpt-5.6-sol",
+        model: "gpt-5.6-sol",
 
-            reasoning: {
-                effort: "none"
-            },
+        reasoning: {
+            effort: "none"
+        },
 
-            input: prompt
-        });
+        input: prompt
+    });
 
+    let output = response.output_text;
 
-    let output =
-        response.output_text;
+    output = output
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
 
-
-    // 혹시 코드 블록이 붙었을 경우 제거
-    output =
-        output
-            .replace(/```json/g, "")
-            .replace(/```/g, "")
-            .trim();
-
-
-    const parsed =
-        JSON.parse(output);
-
+    const parsed = JSON.parse(output);
 
     // =================================================
     // 결과 검사
     // =================================================
 
-    if (
-        !parsed.questions
-        ||
-        !Array.isArray(
-            parsed.questions
-        )
-    ) {
-
-        throw new Error(
-            "questions 배열이 없습니다."
-        );
-    }
-
-
-    if (
-        parsed.questions.length
-        !== 10
-    ) {
-
-        throw new Error(
-            "문제 개수가 10개가 아닙니다."
-        );
-    }
-
+    validateQuestions(
+        parsed.questions,
+        emotion,
+        difficulty
+    );
 
     // =================================================
-    // 이번 문제 저장
+    // 이전 문제 저장
     // =================================================
 
-    const key =
-        emotion + "_" + difficulty;
-
+    const key = emotion + "_" + difficulty;
 
     if (!previousQuestions[key]) {
-
         previousQuestions[key] = [];
     }
 
-
-    for (
-        const question
-        of parsed.questions
-    ) {
-
+    for (const question of parsed.questions) {
         previousQuestions[key].push(
             question.question
         );
     }
 
-
     // 최근 30문제까지만 기억
-    if (
-        previousQuestions[key].length
-        > 30
-    ) {
-
+    if (previousQuestions[key].length > 30) {
         previousQuestions[key] =
-            previousQuestions[key]
-                .slice(-30);
+            previousQuestions[key].slice(-30);
     }
 
-
     // =================================================
-    // 터미널에 생성 결과 출력
+    // 생성 결과 출력
     // =================================================
 
     console.log("");
+    console.log("===== 새로 생성된 정보·ICT 문제 =====");
 
-    console.log(
-        "===== 새로 생성된 정보 교과 문제 ====="
-    );
+    parsed.questions.forEach((question, index) => {
+        console.log(
+            `${index + 1}. [${question.type}] ${question.question}`
+        );
+    });
 
-
-    parsed.questions.forEach(
-        (question, index) => {
-
-            console.log(
-                `${index + 1}. [${question.type}] ${question.question}`
-            );
-        }
-    );
-
-
-    console.log(
-        "======================================"
-    );
-
+    console.log("================================");
     console.log("");
-
 
     return parsed.questions;
 }
 
-
 // =====================================================
-// 서버 상태 확인
-// =====================================================
-
-app.get(
-    "/",
-    (req, res) => {
-
-        res.send(
-            "Information Education GPT Server Running"
-        );
-    }
-);
-
-
-// =====================================================
-// 브라우저 테스트
+// 11. 서버 상태 확인
 // =====================================================
 
-app.get(
-    "/generate-test",
-    async (req, res) => {
+app.get("/", (req, res) => {
 
-        try {
+    res.send(
+        "Information Education GPT Server Running"
+    );
 
-            const questions =
-                await generateQuestions(
-                    "good",
-                    "hard",
-                    "normal"
-                );
-
-
-            res.json({
-
-                success: true,
-
-                emotion: "good",
-
-                difficulty: "hard",
-
-                adaptiveLevel: "normal",
-
-                subject:
-                    "중·고등학교 정보 교과",
-
-                questions: questions
-            });
-
-        }
-
-        catch (error) {
-
-            console.error(
-                error
-            );
-
-
-            res.status(500).json({
-
-                success: false,
-
-                message:
-                    error.message
-            });
-        }
-    }
-);
-
+});
 
 // =====================================================
-// Unity 실제 요청
+// 12. 브라우저 테스트
 // =====================================================
 
-app.post(
-    "/generate-questions",
-    async (req, res) => {
+app.get("/generate-test", async (req, res) => {
 
-        try {
+    try {
 
-            // ★ Unity에서 적응형 난이도까지 받음
-            const {
-                emotion,
-                difficulty,
-                adaptiveLevel = "normal"
-            } = req.body;
-
-
-            console.log(
-                "============================="
-            );
-
-            console.log(
-                "Unity 요청 받음"
-            );
-
-            console.log(
-                "감정:",
-                emotion
-            );
-
-            console.log(
-                "기본 난이도:",
-                difficulty
-            );
-
-            console.log(
-                "성취도 난이도 보정:",
-                adaptiveLevel
-            );
-
-            console.log(
-                "주제: 중·고등학교 정보 교과"
-            );
-
-            console.log(
-                "============================="
-            );
-
-
-            // ★ adaptiveLevel까지 GPT 문제 생성 함수로 전달
-            const questions =
-                await generateQuestions(
-                    emotion,
-                    difficulty,
-                    adaptiveLevel
-                );
-
-
-            res.json({
-
-                success: true,
-
-                emotion: emotion,
-
-                difficulty: difficulty,
-
-                adaptiveLevel: adaptiveLevel,
-
-                subject:
-                    "중·고등학교 정보 교과",
-
-                questions: questions
-            });
-
-        }
-
-        catch (error) {
-
-            console.error(
-                "문제 생성 오류:",
-                error
-            );
-
-
-            res.status(500).json({
-
-                success: false,
-
-                message:
-                    error.message
-            });
-        }
-    }
-);
-
-
-// =====================================================
-// 서버 실행
-// =====================================================
-
-const PORT = 3000;
-
-
-app.listen(
-    PORT,
-    () => {
-
-        console.log(
-            "정보 교과 GPT 서버 실행 중"
+        const questions = await generateQuestions(
+            "good",
+            "hard",
+            "normal"
         );
 
-        console.log(
-            "http://localhost:"
-            + PORT
-        );
+        res.json({
+
+            success: true,
+
+            emotion: "good",
+
+            difficulty: "hard",
+
+            adaptiveLevel: "normal",
+
+            subject: "정보·ICT 및 컴퓨터 전공 기초",
+
+            questions: questions
+
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
     }
-);
+});
+
+// =====================================================
+// 13. Unity 실제 요청
+// =====================================================
+
+app.post("/generate-questions", async (req, res) => {
+
+    try {
+
+        const {
+            emotion,
+            difficulty,
+            adaptiveLevel = "normal"
+        } = req.body;
+
+        console.log("=============================");
+        console.log("Unity 요청 받음");
+        console.log("감정:", emotion);
+        console.log("기본 난이도:", difficulty);
+        console.log("성취도 난이도 보정:", adaptiveLevel);
+        console.log("주제: 정보·ICT 및 컴퓨터 전공 기초");
+        console.log("=============================");
+
+        const questions = await generateQuestions(
+            emotion,
+            difficulty,
+            adaptiveLevel
+        );
+
+        res.json({
+
+            success: true,
+
+            emotion: emotion,
+
+            difficulty: difficulty,
+
+            adaptiveLevel: adaptiveLevel,
+
+            subject: "정보·ICT 및 컴퓨터 전공 기초",
+
+            questions: questions
+
+        });
+
+    } catch (error) {
+
+        console.error(
+            "문제 생성 오류:",
+            error
+        );
+
+        res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+    }
+});
+
+// =====================================================
+// 14. 서버 실행
+// =====================================================
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+
+    console.log("정보·ICT GPT 서버 실행 중");
+    console.log("PORT:", PORT);
+
+});
